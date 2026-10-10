@@ -136,8 +136,6 @@
     padding: 4px 8px;
     font-size: 12px;
   }
-
-  /* Модальное окно редактора */
   #editor {
     display: none;
     position: fixed;
@@ -226,7 +224,7 @@
 
 <header>
   <h1>Каталог предметов <span>Кузни</span></h1>
-  <div class="toolbar">
+  <div class="toolbar" id="toolbar" style="display:none">
     <button id="btn-add" class="primary">+ Добавить</button>
     <button id="btn-export">Экспорт JSON</button>
     <button id="btn-import">Импорт JSON</button>
@@ -239,12 +237,12 @@
 
 <div id="items"></div>
 
-<div class="hint">
-  <strong>Как пользоваться:</strong><br>
+<div class="hint" id="hint" style="display:none">
+  <strong>Режим редактирования.</strong><br>
   1. Редактируй предметы — черновик сохраняется в браузере автоматически.<br>
   2. Когда готово — нажми <code>Экспорт JSON</code> и замени файл <code>data.json</code> в репозитории.<br>
-  3. Игроки увидят обновлённую версию после коммита.<br>
-  4. <code>Сбросить черновик</code> — вернуться к данным из <code>data.json</code>.
+  3. Игроки увидят обновление после коммита.<br>
+  4. Ссылка для игроков — без <code>?edit=1</code>.
 </div>
 
 <div id="editor">
@@ -291,13 +289,20 @@
 const RARITIES = ["Артефакт", "Легендарный", "Очень редкий", "Редкий"];
 const STORAGE_KEY = "item-catalog-draft";
 
+// Проверяем режим: ?edit=1 — редактор, иначе только чтение
+const params = new URLSearchParams(window.location.search);
+const EDIT_MODE = params.get("edit") === "1";
+
 let items = [];
 let activeFilter = "Все";
 
 async function loadData() {
-  const draft = localStorage.getItem(STORAGE_KEY);
-  if (draft) {
-    try { items = JSON.parse(draft); return; } catch(e) {}
+  // Черновик из localStorage используем ТОЛЬКО в режиме редактирования
+  if (EDIT_MODE) {
+    const draft = localStorage.getItem(STORAGE_KEY);
+    if (draft) {
+      try { items = JSON.parse(draft); return; } catch(e) {}
+    }
   }
   try {
     const res = await fetch("data.json");
@@ -308,6 +313,7 @@ async function loadData() {
 }
 
 function saveDraft() {
+  if (!EDIT_MODE) return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
 }
 
@@ -334,16 +340,17 @@ function renderItems() {
   const list = activeFilter === "Все" ? items : items.filter(i => i.rarity === activeFilter);
 
   if (list.length === 0) {
-    el.innerHTML = '<div class="empty">Пока ничего нет. Нажми «+ Добавить».</div>';
+    el.innerHTML = '<div class="empty">Пока ничего нет.</div>';
     return;
   }
 
   el.innerHTML = list.map(item => `
     <div class="card" data-id="${item.id}">
+      ${EDIT_MODE ? `
       <div class="actions">
         <button data-action="edit" data-id="${item.id}">✎</button>
         <button data-action="delete" data-id="${item.id}" class="danger">✕</button>
-      </div>
+      </div>` : ''}
       <div class="rarity-bar rarity-${item.rarity.replace(/\s/g,'')}"></div>
       <h3>${escapeHtml(item.name)}</h3>
       <div class="meta">${escapeHtml(item.rarity)} · ${escapeHtml(item.type || '')}${item.attunement ? ' · настройка' : ''}</div>
@@ -353,19 +360,21 @@ function renderItems() {
     </div>
   `).join("");
 
-  el.querySelectorAll("[data-action]").forEach(b => {
-    b.onclick = (e) => {
-      e.stopPropagation();
-      const id = b.dataset.id;
-      if (b.dataset.action === "edit") openEditor(id);
-      if (b.dataset.action === "delete") {
-        if (confirm("Удалить предмет?")) {
-          items = items.filter(i => i.id !== id);
-          saveDraft(); render();
+  if (EDIT_MODE) {
+    el.querySelectorAll("[data-action]").forEach(b => {
+      b.onclick = (e) => {
+        e.stopPropagation();
+        const id = b.dataset.id;
+        if (b.dataset.action === "edit") openEditor(id);
+        if (b.dataset.action === "delete") {
+          if (confirm("Удалить предмет?")) {
+            items = items.filter(i => i.id !== id);
+            saveDraft(); render();
+          }
         }
-      }
-    };
-  });
+      };
+    });
+  }
 }
 
 function escapeHtml(s) {
@@ -377,6 +386,7 @@ function uid() {
 }
 
 function openEditor(id) {
+  if (!EDIT_MODE) return;
   const ed = document.getElementById("editor");
   ed.classList.add("open");
   const item = id ? items.find(i => i.id === id) : null;
@@ -396,6 +406,7 @@ function closeEditor() {
 }
 
 function saveItem() {
+  if (!EDIT_MODE) return;
   const id = document.getElementById("ed-id").value;
   const name = document.getElementById("ed-name").value.trim();
   if (!name) { alert("Введите название"); return; }
@@ -443,24 +454,30 @@ function importJson(file) {
   reader.readAsText(file);
 }
 
-document.getElementById("btn-add").onclick = () => openEditor();
-document.getElementById("ed-cancel").onclick = closeEditor;
-document.getElementById("ed-save").onclick = saveItem;
-document.getElementById("btn-export").onclick = exportJson;
-document.getElementById("btn-import").onclick = () => document.getElementById("file-input").click();
-document.getElementById("file-input").onchange = e => {
-  if (e.target.files[0]) importJson(e.target.files[0]);
-  e.target.value = "";
-};
-document.getElementById("btn-reset").onclick = async () => {
-  if (!confirm("Сбросить черновик и вернуться к data.json?")) return;
-  localStorage.removeItem(STORAGE_KEY);
-  await loadData();
-  render();
-};
-document.getElementById("editor").onclick = e => {
-  if (e.target.id === "editor") closeEditor();
-};
+// Инициализация редактора — только в edit-режиме
+if (EDIT_MODE) {
+  document.getElementById("toolbar").style.display = "flex";
+  document.getElementById("hint").style.display = "block";
+
+  document.getElementById("btn-add").onclick = () => openEditor();
+  document.getElementById("ed-cancel").onclick = closeEditor;
+  document.getElementById("ed-save").onclick = saveItem;
+  document.getElementById("btn-export").onclick = exportJson;
+  document.getElementById("btn-import").onclick = () => document.getElementById("file-input").click();
+  document.getElementById("file-input").onchange = e => {
+    if (e.target.files[0]) importJson(e.target.files[0]);
+    e.target.value = "";
+  };
+  document.getElementById("btn-reset").onclick = async () => {
+    if (!confirm("Сбросить черновик и вернуться к data.json?")) return;
+    localStorage.removeItem(STORAGE_KEY);
+    await loadData();
+    render();
+  };
+  document.getElementById("editor").onclick = e => {
+    if (e.target.id === "editor") closeEditor();
+  };
+}
 
 (async () => {
   await loadData();

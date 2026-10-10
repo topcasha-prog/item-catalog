@@ -40,9 +40,23 @@
   button.primary:hover { background: #d9b971; }
   button.danger { color: #e08080; border-color: #6a3030; }
   button.danger:hover { background: #3a2020; }
-  .filters {
+
+  .filter-group {
     max-width: 1100px;
-    margin: 0 auto 20px;
+    margin: 0 auto 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .filter-group .label {
+    font-size: 12px;
+    color: #a09080;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-width: 90px;
+  }
+  .filters {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
@@ -56,9 +70,10 @@
     color: #1a1612;
     border-color: #c9a961;
   }
+
   #items {
     max-width: 1100px;
-    margin: 0 auto;
+    margin: 20px auto 0;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 16px;
@@ -88,6 +103,16 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 12px;
+  }
+  .card .meta .category {
+    display: inline-block;
+    background: #2a231c;
+    border: 1px solid #4a3d30;
+    padding: 2px 8px;
+    border-radius: 4px;
+    color: #c9a961;
+    margin-right: 6px;
+    font-size: 11px;
   }
   .card .desc {
     font-size: 14px;
@@ -132,10 +157,8 @@
     transition: opacity 0.15s;
   }
   .card:hover .actions { opacity: 1; }
-  .card .actions button {
-    padding: 4px 8px;
-    font-size: 12px;
-  }
+  .card .actions button { padding: 4px 8px; font-size: 12px; }
+
   #editor {
     display: none;
     position: fixed;
@@ -233,7 +256,15 @@
   </div>
 </header>
 
-<div class="filters" id="filters"></div>
+<div class="filter-group">
+  <div class="label">Тип:</div>
+  <div class="filters" id="filters-category"></div>
+</div>
+
+<div class="filter-group">
+  <div class="label">Редкость:</div>
+  <div class="filters" id="filters-rarity"></div>
+</div>
 
 <div id="items"></div>
 
@@ -253,6 +284,13 @@
     <label>Название</label>
     <input type="text" id="ed-name" placeholder="Молот Императора">
 
+    <label>Тип (категория)</label>
+    <select id="ed-category">
+      <option>Броня</option>
+      <option>Оружие</option>
+      <option>Магический предмет</option>
+    </select>
+
     <label>Редкость</label>
     <select id="ed-rarity">
       <option>Артефакт</option>
@@ -261,8 +299,8 @@
       <option>Редкий</option>
     </select>
 
-    <label>Тип</label>
-    <input type="text" id="ed-type" placeholder="Оружие / Доспех / Жезл">
+    <label>Подтип (для отображения)</label>
+    <input type="text" id="ed-type" placeholder="Тяжёлый доспех / Одноручный меч / Жезл">
 
     <div class="checkbox-row">
       <input type="checkbox" id="ed-attune">
@@ -273,7 +311,7 @@
     <textarea id="ed-desc" placeholder="Краткое описание предмета..."></textarea>
 
     <label>Свойства (по одному на строку)</label>
-    <textarea id="ed-props" placeholder="+3 к атаке и урону&#10;2к6 огнём&#10;Удар по земле (3 заряда)"></textarea>
+    <textarea id="ed-props" placeholder="+3 к атаке и урону&#10;2к6 огнём"></textarea>
 
     <label>Проклятие (оставь пустым, если нет)</label>
     <textarea id="ed-curse" placeholder="Пока надет — нельзя использовать щит"></textarea>
@@ -287,17 +325,17 @@
 
 <script>
 const RARITIES = ["Артефакт", "Легендарный", "Очень редкий", "Редкий"];
+const CATEGORIES = ["Броня", "Оружие", "Магический предмет"];
 const STORAGE_KEY = "item-catalog-draft";
 
-// Проверяем режим: ?edit=1 — редактор, иначе только чтение
 const params = new URLSearchParams(window.location.search);
 const EDIT_MODE = params.get("edit") === "1";
 
 let items = [];
-let activeFilter = "Все";
+let activeRarity = "Все";
+let activeCategory = "Все";
 
 async function loadData() {
-  // Черновик из localStorage используем ТОЛЬКО в режиме редактирования
   if (EDIT_MODE) {
     const draft = localStorage.getItem(STORAGE_KEY);
     if (draft) {
@@ -323,24 +361,39 @@ function render() {
 }
 
 function renderFilters() {
-  const el = document.getElementById("filters");
-  const counts = { "Все": items.length };
-  RARITIES.forEach(r => counts[r] = items.filter(i => i.rarity === r).length);
-  const list = ["Все", ...RARITIES];
-  el.innerHTML = list.map(f =>
-    `<button data-filter="${f}" class="${f === activeFilter ? 'active' : ''}">${f} (${counts[f] || 0})</button>`
+  // Категории
+  const catCounts = { "Все": items.length };
+  CATEGORIES.forEach(c => catCounts[c] = items.filter(i => i.category === c).length);
+  const catList = ["Все", ...CATEGORIES];
+  const catEl = document.getElementById("filters-category");
+  catEl.innerHTML = catList.map(f =>
+    `<button data-cat="${f}" class="${f === activeCategory ? 'active' : ''}">${f} (${catCounts[f] || 0})</button>`
   ).join("");
-  el.querySelectorAll("button").forEach(b => {
-    b.onclick = () => { activeFilter = b.dataset.filter; render(); };
+  catEl.querySelectorAll("button").forEach(b => {
+    b.onclick = () => { activeCategory = b.dataset.cat; render(); };
+  });
+
+  // Редкости
+  const rarCounts = { "Все": items.length };
+  RARITIES.forEach(r => rarCounts[r] = items.filter(i => i.rarity === r).length);
+  const rarList = ["Все", ...RARITIES];
+  const rarEl = document.getElementById("filters-rarity");
+  rarEl.innerHTML = rarList.map(f =>
+    `<button data-rar="${f}" class="${f === activeRarity ? 'active' : ''}">${f} (${rarCounts[f] || 0})</button>`
+  ).join("");
+  rarEl.querySelectorAll("button").forEach(b => {
+    b.onclick = () => { activeRarity = b.dataset.rar; render(); };
   });
 }
 
 function renderItems() {
   const el = document.getElementById("items");
-  const list = activeFilter === "Все" ? items : items.filter(i => i.rarity === activeFilter);
+  let list = items;
+  if (activeCategory !== "Все") list = list.filter(i => i.category === activeCategory);
+  if (activeRarity !== "Все") list = list.filter(i => i.rarity === activeRarity);
 
   if (list.length === 0) {
-    el.innerHTML = '<div class="empty">Пока ничего нет.</div>';
+    el.innerHTML = '<div class="empty">Ничего не найдено.</div>';
     return;
   }
 
@@ -353,7 +406,10 @@ function renderItems() {
       </div>` : ''}
       <div class="rarity-bar rarity-${item.rarity.replace(/\s/g,'')}"></div>
       <h3>${escapeHtml(item.name)}</h3>
-      <div class="meta">${escapeHtml(item.rarity)} · ${escapeHtml(item.type || '')}${item.attunement ? ' · настройка' : ''}</div>
+      <div class="meta">
+        ${item.category ? `<span class="category">${escapeHtml(item.category)}</span>` : ''}
+        ${escapeHtml(item.rarity)}${item.type ? ' · ' + escapeHtml(item.type) : ''}${item.attunement ? ' · настройка' : ''}
+      </div>
       ${item.desc ? `<div class="desc">${escapeHtml(item.desc)}</div>` : ''}
       ${item.props && item.props.length ? `<ul class="props">${item.props.map(p => `<li>${escapeHtml(p)}</li>`).join("")}</ul>` : ''}
       ${item.curse ? `<div class="curse"><strong>Проклятие</strong>${escapeHtml(item.curse)}</div>` : ''}
@@ -393,6 +449,7 @@ function openEditor(id) {
   document.getElementById("editor-title").textContent = item ? "Редактировать" : "Новый предмет";
   document.getElementById("ed-id").value = item ? item.id : "";
   document.getElementById("ed-name").value = item ? item.name : "";
+  document.getElementById("ed-category").value = item && item.category ? item.category : "Оружие";
   document.getElementById("ed-rarity").value = item ? item.rarity : "Редкий";
   document.getElementById("ed-type").value = item ? (item.type || "") : "";
   document.getElementById("ed-attune").checked = item ? !!item.attunement : false;
@@ -413,6 +470,7 @@ function saveItem() {
   const data = {
     id: id || uid(),
     name,
+    category: document.getElementById("ed-category").value,
     rarity: document.getElementById("ed-rarity").value,
     type: document.getElementById("ed-type").value.trim(),
     attunement: document.getElementById("ed-attune").checked,
@@ -454,7 +512,6 @@ function importJson(file) {
   reader.readAsText(file);
 }
 
-// Инициализация редактора — только в edit-режиме
 if (EDIT_MODE) {
   document.getElementById("toolbar").style.display = "flex";
   document.getElementById("hint").style.display = "block";

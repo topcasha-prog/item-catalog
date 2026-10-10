@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Каталог предметов Кузни</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #1a1612;
+    color: #e8e0d0;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  header {
+    max-width: 1100px;
+    margin: 0 auto 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  h1 { font-size: 24px; font-weight: 600; letter-spacing: 0.5px; }
+  h1 span { color: #c9a961; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    background: #2a231c;
+    color: #e8e0d0;
+    border: 1px solid #4a3d30;
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.15s;
+  }
+  button:hover { background: #3a3025; border-color: #c9a961; }
+  button.primary { background: #c9a961; color: #1a1612; border-color: #c9a961; font-weight: 600; }
+  button.primary:hover { background: #d9b971; }
+  button.danger { color: #e08080; border-color: #6a3030; }
+  button.danger:hover { background: #3a2020; }
+  .filters {
+    max-width: 1100px;
+    margin: 0 auto 20px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .filters button {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+  .filters button.active {
+    background: #c9a961;
+    color: #1a1612;
+    border-color: #c9a961;
+  }
+  #items {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: #221d18;
+    border: 1px solid #3a3025;
+    border-radius: 10px;
+    padding: 18px;
+    position: relative;
+    transition: border-color 0.15s;
+  }
+  .card:hover { border-color: #5a4a38; }
+  .card .rarity-bar {
+    height: 3px;
+    border-radius: 3px;
+    margin-bottom: 12px;
+  }
+  .rarity-Артефакт { background: linear-gradient(90deg, #ff6b35, #c9a961, #ff6b35); }
+  .rarity-Легендарный { background: linear-gradient(90deg, #c9a961, #f0d878); }
+  .rarity-ОченьРедкий { background: linear-gradient(90deg, #7a5fc7, #b89fe8); }
+  .rarity-Редкий { background: linear-gradient(90deg, #4a7ac7, #7aa8e8); }
+  .card h3 { font-size: 18px; margin-bottom: 4px; color: #f0e8d8; }
+  .card .meta {
+    font-size: 12px;
+    color: #a09080;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+  }
+  .card .desc {
+    font-size: 14px;
+    line-height: 1.5;
+    color: #c8c0b0;
+    margin-bottom: 12px;
+    white-space: pre-wrap;
+  }
+  .card .props { list-style: none; }
+  .card .props li {
+    font-size: 13px;
+    line-height: 1.5;
+    padding-left: 14px;
+    position: relative;
+    margin-bottom: 4px;
+    color: #d8d0c0;
+  }
+  .card .props li::before {
+    content: "▸";
+    position: absolute;
+    left: 0;
+    color: #c9a961;
+  }
+  .card .curse {
+    margin-top: 12px;
+    padding: 10px;
+    background: #2a1a1a;
+    border-left: 3px solid #8a4040;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #e0b0b0;
+    line-height: 1.5;
+  }
+  .card .curse strong { color: #ff8080; display: block; margin-bottom: 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .card .actions {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    gap: 6px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .card:hover .actions { opacity: 1; }
+  .card .actions button {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+
+  /* Модальное окно редактора */
+  #editor {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 100;
+    overflow-y: auto;
+    padding: 20px;
+  }
+  #editor.open { display: block; }
+  #editor .modal {
+    max-width: 640px;
+    margin: 40px auto;
+    background: #221d18;
+    border: 1px solid #4a3d30;
+    border-radius: 12px;
+    padding: 24px;
+  }
+  #editor h2 { margin-bottom: 20px; font-size: 20px; color: #c9a961; }
+  #editor label {
+    display: block;
+    font-size: 12px;
+    color: #a09080;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    margin-top: 14px;
+  }
+  #editor input, #editor textarea, #editor select {
+    width: 100%;
+    background: #1a1612;
+    border: 1px solid #3a3025;
+    color: #e8e0d0;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  #editor input:focus, #editor textarea:focus, #editor select:focus {
+    outline: none;
+    border-color: #c9a961;
+  }
+  #editor textarea { min-height: 80px; resize: vertical; font-family: inherit; }
+  #editor .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  #editor .checkbox-row input { width: auto; }
+  #editor .checkbox-row label { margin: 0; text-transform: none; font-size: 14px; color: #e8e0d0; }
+  #editor .modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 24px;
+  }
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: #807060;
+    font-size: 16px;
+    grid-column: 1 / -1;
+  }
+  .hint {
+    max-width: 1100px;
+    margin: 30px auto 0;
+    padding: 16px;
+    background: #1f1a15;
+    border: 1px dashed #4a3d30;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #a09080;
+    line-height: 1.6;
+  }
+  .hint code {
+    background: #2a231c;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #c9a961;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Каталог предметов <span>Кузни</span></h1>
+  <div class="toolbar">
+    <button id="btn-add" class="primary">+ Добавить</button>
+    <button id="btn-export">Экспорт JSON</button>
+    <button id="btn-import">Импорт JSON</button>
+    <button id="btn-reset" class="danger">Сбросить черновик</button>
+    <input type="file" id="file-input" accept=".json" style="display:none">
+  </div>
+</header>
+
+<div class="filters" id="filters"></div>
+
+<div id="items"></div>
+
+<div class="hint">
+  <strong>Как пользоваться:</strong><br>
+  1. Редактируй предметы — черновик сохраняется в браузере автоматически.<br>
+  2. Когда готово — нажми <code>Экспорт JSON</code> и замени файл <code>data.json</code> в репозитории.<br>
+  3. Игроки увидят обновлённую версию после коммита.<br>
+  4. <code>Сбросить черновик</code> — вернуться к данным из <code>data.json</code>.
+</div>
+
+<div id="editor">
+  <div class="modal">
+    <h2 id="editor-title">Новый предмет</h2>
+    <input type="hidden" id="ed-id">
+
+    <label>Название</label>
+    <input type="text" id="ed-name" placeholder="Молот Императора">
+
+    <label>Редкость</label>
+    <select id="ed-rarity">
+      <option>Артефакт</option>
+      <option>Легендарный</option>
+      <option>Очень редкий</option>
+      <option>Редкий</option>
+    </select>
+
+    <label>Тип</label>
+    <input type="text" id="ed-type" placeholder="Оружие / Доспех / Жезл">
+
+    <div class="checkbox-row">
+      <input type="checkbox" id="ed-attune">
+      <label for="ed-attune">Требует настройки</label>
+    </div>
+
+    <label>Описание</label>
+    <textarea id="ed-desc" placeholder="Краткое описание предмета..."></textarea>
+
+    <label>Свойства (по одному на строку)</label>
+    <textarea id="ed-props" placeholder="+3 к атаке и урону&#10;2к6 огнём&#10;Удар по земле (3 заряда)"></textarea>
+
+    <label>Проклятие (оставь пустым, если нет)</label>
+    <textarea id="ed-curse" placeholder="Пока надет — нельзя использовать щит"></textarea>
+
+    <div class="modal-actions">
+      <button id="ed-cancel">Отмена</button>
+      <button id="ed-save" class="primary">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const RARITIES = ["Артефакт", "Легендарный", "Очень редкий", "Редкий"];
+const STORAGE_KEY = "item-catalog-draft";
+
+let items = [];
+let activeFilter = "Все";
+
+async function loadData() {
+  const draft = localStorage.getItem(STORAGE_KEY);
+  if (draft) {
+    try { items = JSON.parse(draft); return; } catch(e) {}
+  }
+  try {
+    const res = await fetch("data.json");
+    items = await res.json();
+  } catch(e) {
+    items = [];
+  }
+}
+
+function saveDraft() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+}
+
+function render() {
+  renderFilters();
+  renderItems();
+}
+
+function renderFilters() {
+  const el = document.getElementById("filters");
+  const counts = { "Все": items.length };
+  RARITIES.forEach(r => counts[r] = items.filter(i => i.rarity === r).length);
+  const list = ["Все", ...RARITIES];
+  el.innerHTML = list.map(f =>
+    `<button data-filter="${f}" class="${f === activeFilter ? 'active' : ''}">${f} (${counts[f] || 0})</button>`
+  ).join("");
+  el.querySelectorAll("button").forEach(b => {
+    b.onclick = () => { activeFilter = b.dataset.filter; render(); };
+  });
+}
+
+function renderItems() {
+  const el = document.getElementById("items");
+  const list = activeFilter === "Все" ? items : items.filter(i => i.rarity === activeFilter);
+
+  if (list.length === 0) {
+    el.innerHTML = '<div class="empty">Пока ничего нет. Нажми «+ Добавить».</div>';
+    return;
+  }
+
+  el.innerHTML = list.map(item => `
+    <div class="card" data-id="${item.id}">
+      <div class="actions">
+        <button data-action="edit" data-id="${item.id}">✎</button>
+        <button data-action="delete" data-id="${item.id}" class="danger">✕</button>
+      </div>
+      <div class="rarity-bar rarity-${item.rarity.replace(/\s/g,'')}"></div>
+      <h3>${escapeHtml(item.name)}</h3>
+      <div class="meta">${escapeHtml(item.rarity)} · ${escapeHtml(item.type || '')}${item.attunement ? ' · настройка' : ''}</div>
+      ${item.desc ? `<div class="desc">${escapeHtml(item.desc)}</div>` : ''}
+      ${item.props && item.props.length ? `<ul class="props">${item.props.map(p => `<li>${escapeHtml(p)}</li>`).join("")}</ul>` : ''}
+      ${item.curse ? `<div class="curse"><strong>Проклятие</strong>${escapeHtml(item.curse)}</div>` : ''}
+    </div>
+  `).join("");
+
+  el.querySelectorAll("[data-action]").forEach(b => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      const id = b.dataset.id;
+      if (b.dataset.action === "edit") openEditor(id);
+      if (b.dataset.action === "delete") {
+        if (confirm("Удалить предмет?")) {
+          items = items.filter(i => i.id !== id);
+          saveDraft(); render();
+        }
+      }
+    };
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function openEditor(id) {
+  const ed = document.getElementById("editor");
+  ed.classList.add("open");
+  const item = id ? items.find(i => i.id === id) : null;
+  document.getElementById("editor-title").textContent = item ? "Редактировать" : "Новый предмет";
+  document.getElementById("ed-id").value = item ? item.id : "";
+  document.getElementById("ed-name").value = item ? item.name : "";
+  document.getElementById("ed-rarity").value = item ? item.rarity : "Редкий";
+  document.getElementById("ed-type").value = item ? (item.type || "") : "";
+  document.getElementById("ed-attune").checked = item ? !!item.attunement : false;
+  document.getElementById("ed-desc").value = item ? (item.desc || "") : "";
+  document.getElementById("ed-props").value = item && item.props ? item.props.join("\n") : "";
+  document.getElementById("ed-curse").value = item ? (item.curse || "") : "";
+}
+
+function closeEditor() {
+  document.getElementById("editor").classList.remove("open");
+}
+
+function saveItem() {
+  const id = document.getElementById("ed-id").value;
+  const name = document.getElementById("ed-name").value.trim();
+  if (!name) { alert("Введите название"); return; }
+  const data = {
+    id: id || uid(),
+    name,
+    rarity: document.getElementById("ed-rarity").value,
+    type: document.getElementById("ed-type").value.trim(),
+    attunement: document.getElementById("ed-attune").checked,
+    desc: document.getElementById("ed-desc").value.trim(),
+    props: document.getElementById("ed-props").value.split("\n").map(s => s.trim()).filter(Boolean),
+    curse: document.getElementById("ed-curse").value.trim()
+  };
+  if (id) {
+    items = items.map(i => i.id === id ? data : i);
+  } else {
+    items.push(data);
+  }
+  saveDraft(); render(); closeEditor();
+}
+
+function exportJson() {
+  const blob = new Blob([JSON.stringify(items, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "data.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importJson(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!Array.isArray(data)) throw new Error("Ожидался массив");
+      items = data;
+      saveDraft(); render();
+      alert("Импортировано: " + data.length + " предметов");
+    } catch(err) {
+      alert("Ошибка: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+document.getElementById("btn-add").onclick = () => openEditor();
+document.getElementById("ed-cancel").onclick = closeEditor;
+document.getElementById("ed-save").onclick = saveItem;
+document.getElementById("btn-export").onclick = exportJson;
+document.getElementById("btn-import").onclick = () => document.getElementById("file-input").click();
+document.getElementById("file-input").onchange = e => {
+  if (e.target.files[0]) importJson(e.target.files[0]);
+  e.target.value = "";
+};
+document.getElementById("btn-reset").onclick = async () => {
+  if (!confirm("Сбросить черновик и вернуться к data.json?")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  await loadData();
+  render();
+};
+document.getElementById("editor").onclick = e => {
+  if (e.target.id === "editor") closeEditor();
+};
+
+(async () => {
+  await loadData();
+  render();
+})();
+</script>
+</body>
+</html>
